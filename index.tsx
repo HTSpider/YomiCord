@@ -781,24 +781,12 @@ function buildImageFingerprint(base64Data: string, extension: string) {
     return `${extension.toLowerCase()}:${base64Data.length}:${base64Data.slice(0, 128)}`;
 }
 
-async function getNativeClipboardImageFingerprint() {
-    try {
-        const nativeBase64 = await Native.readClipboardImagePngBase64();
-        if (!nativeBase64) return "";
-        return buildImageFingerprint(nativeBase64, "png");
-    } catch {
-        return "";
-    }
-}
-
-async function getClipboardImageHtml(options?: { requireChangedFromFingerprint?: string; }) {
+async function getClipboardImageHtml() {
     const imageUrlRegex = /^https?:\/\/.+\.(png|jpe?g|webp|gif)(\?.*)?$/iu;
     const dataUrlRegex = /^data:image\/(png|jpe?g|webp|gif);base64,/iu;
-    const requiredFingerprint = options?.requireChangedFromFingerprint ?? "";
 
     const storeClipboardImageIfFresh = async (base64Data: string, extension: string) => {
         const fingerprint = buildImageFingerprint(base64Data, extension);
-        if (requiredFingerprint && fingerprint === requiredFingerprint) return "";
         if (fingerprint === lastClipboardImageFingerprint) return "";
 
         const html = await storeImageInAnkiMedia(base64Data, extension);
@@ -916,10 +904,8 @@ async function getMessageImageHtml(message?: Message) {
     }
 }
 
-async function resolveAutoImageHtml(message?: Message, options?: { requireChangedClipboardFingerprint?: string; }) {
-    const clipboardImage = await getClipboardImageHtml({
-        requireChangedFromFingerprint: options?.requireChangedClipboardFingerprint
-    });
+async function resolveAutoImageHtml(message?: Message) {
+    const clipboardImage = await getClipboardImageHtml();
     if (clipboardImage) return clipboardImage;
 
     const messageImage = await getMessageImageHtml(message);
@@ -2104,7 +2090,6 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
     const [imageStatus, setImageStatus] = useState<"idle" | "loading" | "ready" | "none">("idle");
     const [cachedImageHtml, setCachedImageHtml] = useState<string>("");
     const [cachedImageContextKey, setCachedImageContextKey] = useState<string>("");
-    const [lookupClipboardBaselineFingerprint, setLookupClipboardBaselineFingerprint] = useState<string>("");
     const [addingKey, setAddingKey] = useState<string | null>(null);
     const [chipStatus, setChipStatus] = useState<Record<string, "added" | "duplicate" | "error">>({});
     const [duplicateNoteIdByKey, setDuplicateNoteIdByKey] = useState<Record<string, number>>({});
@@ -2224,7 +2209,6 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                 if (!cancelled) {
                     setCachedImageHtml("");
                     setCachedImageContextKey("");
-                    setLookupClipboardBaselineFingerprint("");
                     setImageStatus("idle");
                 }
                 return;
@@ -2237,13 +2221,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                 setImageStatus("loading");
             }
 
-            const baselineFingerprint = await getNativeClipboardImageFingerprint();
-            if (cancelled) return;
-            setLookupClipboardBaselineFingerprint(baselineFingerprint);
-
-            const imageHtml = await resolveAutoImageHtml(message, {
-                requireChangedClipboardFingerprint: baselineFingerprint
-            });
+            const imageHtml = await resolveAutoImageHtml(message);
             if (cancelled) return;
 
             setCachedImageHtml(imageHtml);
@@ -2279,9 +2257,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                 imageHtml = cachedImageContextKey === imageContextKey ? cachedImageHtml : "";
                 if (!imageHtml) {
                     setImageStatus("loading");
-                    imageHtml = await resolveAutoImageHtml(message, {
-                        requireChangedClipboardFingerprint: lookupClipboardBaselineFingerprint
-                    });
+                    imageHtml = await resolveAutoImageHtml(message);
                     setCachedImageHtml(imageHtml);
                     setCachedImageContextKey(imageContextKey);
                     setImageStatus(imageHtml ? "ready" : "none");
