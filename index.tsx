@@ -174,6 +174,7 @@ interface AnkiTemplateData {
     jlpt: string;
     sentence: string;
     translation: string;
+    audio: string;
     image: string;
 }
 
@@ -986,7 +987,7 @@ function renderAnkiTemplate(template: string, data: AnkiTemplateData) {
         if (normalized === "jlpt") return data.jlpt;
         if (normalized === "sentence") return data.sentence;
         if (normalized === "translation") return data.translation;
-        if (normalized === "audio") return "";
+        if (normalized === "audio") return data.audio;
         if (normalized === "image") return data.image;
         return "";
     });
@@ -1095,6 +1096,12 @@ async function buildFieldsForModel(modelName: string, mappingText: string, data:
         if (Object.prototype.hasOwnProperty.call(mappedFields, fieldName)) {
             filteredFields[fieldName] = mappedFields[fieldName];
         }
+    }
+
+    // Inject audio directly into the model's Audio field if not already populated via field map.
+    if (data.audio && !Object.values(filteredFields).some(v => v.includes("[sound:"))) {
+        const audioField = modelFieldNames.find(f => /^audio$/i.test(f));
+        if (audioField) filteredFields[audioField] = data.audio;
     }
 
     if (Object.keys(filteredFields).length > 0) {
@@ -1329,6 +1336,40 @@ function extractSegmentGrammarPoints(segment: ClauseBreakdown): GrammarPointEntr
     return entries;
 }
 
+async function fetchAudioForAnki(expression: string, reading: string): Promise<string> {
+    const kana = reading || inferReading(expression) || expression;
+    if (!kana) return "";
+    const kanji = /[\p{Script=Han}]/u.test(expression) ? expression : "";
+    const url = `https://assets.languagepod101.com/dictionary/japanese/audiomp3.php?kanji=${encodeURIComponent(kanji)}&kana=${encodeURIComponent(kana)}`;
+
+    let base64 = "";
+    try {
+        // Native path bypasses renderer CSP for external binary fetches.
+        base64 = await Native.fetchBinaryAsBase64(url);
+    } catch { }
+
+    if (!base64) {
+        try {
+            const response = await fetch(url, { headers: { "Referer": "https://jisho.org" } });
+            if (response.ok) {
+                const buffer = await response.arrayBuffer();
+                if (buffer.byteLength > 500) base64 = bytesToBase64(new Uint8Array(buffer));
+            }
+        } catch { }
+    }
+
+    if (!base64) return "";
+    try {
+        const fileName = `yomicord_audio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp3`;
+        await callAnkiConnect("storeMediaFile", { filename: fileName, data: base64 });
+        return `[sound:${fileName}]`;
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        showToast(`YomiCord: Audio failed to store in Anki (${msg})`, Toasts.Type.FAILURE);
+        return "";
+    }
+}
+
 async function addTermToAnki(expression: string, meaning: string, sourceSentence: string, translation: string, image: string, deckName: string, modelName: string, fieldMap: string, cardType: AnkiCardType, tags: string[] = ["yomicord"]) {
     let jishoMeaning = "";
     let jishoReading = "";
@@ -1342,11 +1383,15 @@ async function addTermToAnki(expression: string, meaning: string, sourceSentence
         .map(value => value.trim())
         .find(value => value.length > 0) ?? expression;
 
+    const resolvedReading = jishoReading || inferReading(expression);
+    // Always attempt audio regardless of field map; injected directly into Audio model field below.
+    const audio = await fetchAudioForAnki(expression, resolvedReading);
+
     const templateData: AnkiTemplateData = {
         type: cardType,
         expression,
         meaning: normalizedMeaning,
-        reading: jishoReading || inferReading(expression),
+        reading: resolvedReading,
         kunyomi: "",
         onyomi: "",
         keywords: "",
@@ -1355,6 +1400,7 @@ async function addTermToAnki(expression: string, meaning: string, sourceSentence
         jlpt: "",
         sentence: sourceSentence,
         translation,
+        audio,
         image
     };
 
@@ -1419,6 +1465,7 @@ async function addKanjiToAnki(character: string, meaning: string, sourceSentence
         jlpt,
         sentence: sourceSentence,
         translation,
+        audio: "",
         image
     };
 
@@ -2154,7 +2201,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
 
         try {
             await callAnkiConnect<number[]>("guiBrowse", { query: `nid:${noteId}` });
-            showToast("YomiCord: Opened duplicate in Anki", Toasts.Type.SUCCESS);
+            showToast("YomiCord: Opened in Anki Browser", Toasts.Type.SUCCESS);
         } catch (cause) {
             const message = cause instanceof Error ? cause.message : String(cause);
             showToast(`YomiCord: Could not open duplicate (${message})`, Toasts.Type.FAILURE);
@@ -2163,7 +2210,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
 
     const renderDuplicateOpenButton = (key: string) => {
         const noteId = duplicateNoteIdByKey[key];
-        if (chipStatus[key] !== "duplicate" || !noteId) return null;
+        if (!noteId || (chipStatus[key] !== "duplicate" && chipStatus[key] !== "added")) return null;
 
         return (
             <button
@@ -2180,7 +2227,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                     justifyContent: "center",
                     cursor: "pointer"
                 }}
-                title="Open duplicate note in Anki Browser"
+                title={chipStatus[key] === "added" ? "View in Anki Browser" : "Open duplicate in Anki Browser"}
                 onClick={() => void openDuplicateInAnki(key)}
             >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -2271,7 +2318,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
             if (targetType === "kanji") {
                 duplicateLookupDeck = settings.store.ankiKanjiDeck;
                 duplicateLookupModel = settings.store.ankiKanjiModelName;
-                await addKanjiToAnki(
+                const kanjiNoteId = await addKanjiToAnki(
                     normalized,
                     meaning,
                     sourceSentence,
@@ -2282,11 +2329,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                     settings.store.ankiKanjiFieldMap
                 );
                 setChipStatus(prev => ({ ...prev, [key]: "added" }));
-                setDuplicateNoteIdByKey(prev => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
+                setDuplicateNoteIdByKey(prev => ({ ...prev, [key]: kanjiNoteId }));
                 showToast(`YomiCord: Added kanji ${normalized}`, Toasts.Type.SUCCESS);
             } else {
                 const deckName = targetType === "grammar"
@@ -2313,13 +2356,9 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                 duplicateLookupDeck = deckName;
                 duplicateLookupModel = modelName;
 
-                await addTermToAnki(normalized, meaning, sourceSentence, translation, imageHtml, deckName, modelName, fieldMap, targetType, tags);
+                const termNoteId = await addTermToAnki(normalized, meaning, sourceSentence, translation, imageHtml, deckName, modelName, fieldMap, targetType, tags);
                 setChipStatus(prev => ({ ...prev, [key]: "added" }));
-                setDuplicateNoteIdByKey(prev => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
+                setDuplicateNoteIdByKey(prev => ({ ...prev, [key]: termNoteId }));
                 showToast(`YomiCord: Added term ${normalized}`, Toasts.Type.SUCCESS);
             }
         } catch (cause) {
