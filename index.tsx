@@ -7,11 +7,14 @@
 import { ApplicationCommandInputType, ApplicationCommandOptionType, findOption, sendBotMessage } from "@api/Commands";
 import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings } from "@api/Settings";
-import { HeadingSecondary } from "@components/Heading";
+import { Button } from "@components/Button";
+import ErrorBoundary from "@components/ErrorBoundary";
+import { Heading } from "@components/Heading";
+import { Paragraph } from "@components/Paragraph";
 import definePlugin, { IconComponent, OptionType, PluginNative } from "@utils/types";
 import { RenderModalProps } from "@vencord/discord-types";
 import { Message } from "@vencord/discord-types";
-import { AuthenticationStore, Button, Forms, Menu, Modal, openModal, SearchableSelect, showToast, TextInput, Toasts, useEffect, useState } from "@webpack/common";
+import { AuthenticationStore, ChannelStore, GuildStore, Menu, Modal, openModal, SearchableSelect, showToast, TextInput, useEffect, useState } from "@webpack/common";
 import TinySegmenter from "tiny-segmenter";
 
 import { translate } from "@plugins/translate/utils";
@@ -174,6 +177,7 @@ interface AnkiTemplateData {
     jlpt: string;
     sentence: string;
     translation: string;
+    audio: string;
     image: string;
 }
 
@@ -369,44 +373,44 @@ function AnkiDeckModelPicker() {
                         <Button
                             key={type}
                             onClick={() => setActiveTab(type)}
-                            color={activeTab === type ? Button.Colors.BRAND : Button.Colors.PRIMARY}
-                            size={Button.Sizes.SMALL}
+                            variant={activeTab === type ? "primary" : "secondary"}
+                            size="small"
                         >
                             {typeMeta[type].label}
                         </Button>
                     ))}
                 </div>
-                <Button onClick={() => void refreshLists()} disabled={isLoading} size={Button.Sizes.SMALL}>
+                <Button onClick={() => void refreshLists()} disabled={isLoading} size="small">
                     {isLoading ? "Refreshing..." : "Refresh"}
                 </Button>
             </div>
-            <Forms.FormText style={{ fontSize: 11 }}>{status}</Forms.FormText>
+            <Paragraph style={{ fontSize: 11 }}>{status}</Paragraph>
 
             {activeTab === "setup" ? (
                 <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <Forms.FormTitle tag="h4" style={{ margin: 0 }}>Setup</Forms.FormTitle>
-                    <Forms.FormText>1. Install Anki and the AnkiConnect add-on.</Forms.FormText>
-                    <Forms.FormText>2. Open Anki before using YomiCord.</Forms.FormText>
-                    <Forms.FormText>3. Keep AnkiConnect URL as {ANKI_CONNECT_URL_DEFAULT} unless you changed it.</Forms.FormText>
-                    <Forms.FormText>4. Click Refresh, then pick deck and note type for each card type tab.</Forms.FormText>
+                    <Heading tag="h4" style={{ margin: 0 }}>Setup</Heading>
+                    <Paragraph>1. Install Anki and the AnkiConnect add-on.</Paragraph>
+                    <Paragraph>2. Open Anki before using YomiCord.</Paragraph>
+                    <Paragraph>3. Keep AnkiConnect URL as {ANKI_CONNECT_URL_DEFAULT} unless you changed it.</Paragraph>
+                    <Paragraph>4. Click Refresh, then pick deck and note type for each card type tab.</Paragraph>
 
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <Forms.FormTitle tag="h5">Auto Attach Image</Forms.FormTitle>
+                        <Heading tag="h5">Auto Attach Image</Heading>
                         <Button
-                            size={Button.Sizes.SMALL}
-                            color={values.autoAttachImage ? Button.Colors.BRAND : Button.Colors.PRIMARY}
+                            size="small"
+                            variant={values.autoAttachImage ? "primary" : "secondary"}
                             onClick={() => settings.store.autoAttachImage = !settings.store.autoAttachImage}
                             style={{ width: "fit-content" }}
                         >
                             {values.autoAttachImage ? "On" : "Off"}
                         </Button>
-                        <Forms.FormText style={{ fontSize: 11 }}>
+                        <Paragraph style={{ fontSize: 11 }}>
                             When on, YomiCord tries clipboard image first, then message image, and reuses that image for all adds in the same lookup.
-                        </Forms.FormText>
+                        </Paragraph>
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <Forms.FormTitle tag="h5">AnkiConnect URL</Forms.FormTitle>
+                        <Heading tag="h5">AnkiConnect URL</Heading>
                         <TextInput
                             value={values.ankiConnectUrl}
                             placeholder={ANKI_CONNECT_URL_DEFAULT}
@@ -415,16 +419,16 @@ function AnkiDeckModelPicker() {
                     </div>
 
                     <div style={{ borderTop: "1px solid var(--border-subtle)", opacity: 0.8 }} />
-                    <Forms.FormTitle tag="h5" style={{ margin: 0 }}>Screenshot Images (Optional)</Forms.FormTitle>
-                    <Forms.FormText>1. Copy an image to clipboard (for example with Win+Shift+S).</Forms.FormText>
-                    <Forms.FormText>2. Open YomiCord and add your card normally.</Forms.FormText>
-                    <Forms.FormText>3. Include an image field mapping line like <strong>Image: {'{image}'}</strong>.</Forms.FormText>
-                    <Forms.FormText>If no image is detected, the card still saves without an image.</Forms.FormText>
+                    <Heading tag="h5" style={{ margin: 0 }}>Screenshot Images (Optional)</Heading>
+                    <Paragraph>1. Copy an image to clipboard (for example with Win+Shift+S).</Paragraph>
+                    <Paragraph>2. Open YomiCord and add your card normally.</Paragraph>
+                    <Paragraph>3. Include an image field mapping line like <strong>Image: {'{image}'}</strong>.</Paragraph>
+                    <Paragraph>If no image is detected, the card still saves without an image.</Paragraph>
 
                     <div style={{ borderTop: "1px solid var(--border-subtle)", opacity: 0.8 }} />
-                    <Forms.FormTitle tag="h5" style={{ margin: 0 }}>If deck loading fails</Forms.FormTitle>
-                    <Forms.FormText>This is usually an AnkiConnect CORS allowlist issue.</Forms.FormText>
-                    <Forms.FormText>Add these origins to webCorsOriginList and restart Anki:</Forms.FormText>
+                    <Heading tag="h5" style={{ margin: 0 }}>If deck loading fails</Heading>
+                    <Paragraph>This is usually an AnkiConnect CORS allowlist issue.</Paragraph>
+                    <Paragraph>Add these origins to webCorsOriginList and restart Anki:</Paragraph>
                     <textarea
                         value={ANKI_CORS_ORIGINS_TEMPLATE}
                         readOnly
@@ -446,9 +450,9 @@ function AnkiDeckModelPicker() {
                 </div>
             ) : (
                 <div style={{ border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <Forms.FormTitle tag="h4" style={{ margin: 0 }}>{typeMeta[activeType].label}</Forms.FormTitle>
+                    <Heading tag="h4" style={{ margin: 0 }}>{typeMeta[activeType].label}</Heading>
 
-                    <Forms.FormTitle tag="h5">Deck</Forms.FormTitle>
+                    <Heading tag="h5">Deck</Heading>
                     <SearchableSelect
                         placeholder={`Select ${typeMeta[activeType].label.toLowerCase()} deck`}
                         options={withCurrentOption(decks, activeDeck)}
@@ -457,7 +461,7 @@ function AnkiDeckModelPicker() {
                         onChange={value => setDeckValue(activeType, value)}
                     />
 
-                    <Forms.FormTitle tag="h5">Note Type</Forms.FormTitle>
+                    <Heading tag="h5">Note Type</Heading>
                     <SearchableSelect
                         placeholder={`Select ${typeMeta[activeType].label.toLowerCase()} note type`}
                         options={withCurrentOption(models, activeModel)}
@@ -466,8 +470,8 @@ function AnkiDeckModelPicker() {
                         onChange={value => setModelValue(activeType, value)}
                     />
 
-                    <Forms.FormTitle tag="h5">Field Mapping</Forms.FormTitle>
-                    <Forms.FormText>One field per line: <strong>Field Name: {'{template}'}</strong></Forms.FormText>
+                    <Heading tag="h5">Field Mapping</Heading>
+                    <Paragraph>One field per line: <strong>Field Name: {'{template}'}</strong></Paragraph>
                     <textarea
                         value={activeFieldMap}
                         onChange={event => setFieldMapValue(activeType, event.currentTarget.value)}
@@ -486,9 +490,9 @@ function AnkiDeckModelPicker() {
                             resize: "vertical"
                         }}
                     />
-                    <Forms.FormText style={{ fontSize: 11, wordBreak: "break-word" }}>
+                    <Paragraph style={{ fontSize: 11, wordBreak: "break-word" }}>
                         {activeType === "kanji" ? KANJI_TOKEN_HELP_TEXT : WORD_TOKEN_HELP_TEXT}
-                    </Forms.FormText>
+                    </Paragraph>
                 </div>
             )}
         </div>
@@ -986,7 +990,7 @@ function renderAnkiTemplate(template: string, data: AnkiTemplateData) {
         if (normalized === "jlpt") return data.jlpt;
         if (normalized === "sentence") return data.sentence;
         if (normalized === "translation") return data.translation;
-        if (normalized === "audio") return "";
+        if (normalized === "audio") return data.audio;
         if (normalized === "image") return data.image;
         return "";
     });
@@ -1095,6 +1099,12 @@ async function buildFieldsForModel(modelName: string, mappingText: string, data:
         if (Object.prototype.hasOwnProperty.call(mappedFields, fieldName)) {
             filteredFields[fieldName] = mappedFields[fieldName];
         }
+    }
+
+    // Inject audio directly into the model's Audio field if not already populated via field map.
+    if (data.audio && !Object.values(filteredFields).some(v => v.includes("[sound:"))) {
+        const audioField = modelFieldNames.find(f => /^audio$/i.test(f));
+        if (audioField) filteredFields[audioField] = data.audio;
     }
 
     if (Object.keys(filteredFields).length > 0) {
@@ -1329,6 +1339,40 @@ function extractSegmentGrammarPoints(segment: ClauseBreakdown): GrammarPointEntr
     return entries;
 }
 
+async function fetchAudioForAnki(expression: string, reading: string): Promise<string> {
+    const kana = reading || inferReading(expression) || expression;
+    if (!kana) return "";
+    const kanji = /[\p{Script=Han}]/u.test(expression) ? expression : "";
+    const url = `https://assets.languagepod101.com/dictionary/japanese/audiomp3.php?kanji=${encodeURIComponent(kanji)}&kana=${encodeURIComponent(kana)}`;
+
+    let base64 = "";
+    try {
+        // Native path bypasses renderer CSP for external binary fetches.
+        base64 = await Native.fetchBinaryAsBase64(url);
+    } catch { }
+
+    if (!base64) {
+        try {
+            const response = await fetch(url, { headers: { "Referer": "https://jisho.org" } });
+            if (response.ok) {
+                const buffer = await response.arrayBuffer();
+                if (buffer.byteLength > 500) base64 = bytesToBase64(new Uint8Array(buffer));
+            }
+        } catch { }
+    }
+
+    if (!base64) return "";
+    try {
+        const fileName = `yomicord_audio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp3`;
+        await callAnkiConnect("storeMediaFile", { filename: fileName, data: base64 });
+        return `[sound:${fileName}]`;
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        showToast({ text: `YomiCord: Audio failed to store in Anki (${msg})`, variant: "critical" });
+        return "";
+    }
+}
+
 async function addTermToAnki(expression: string, meaning: string, sourceSentence: string, translation: string, image: string, deckName: string, modelName: string, fieldMap: string, cardType: AnkiCardType, tags: string[] = ["yomicord"]) {
     let jishoMeaning = "";
     let jishoReading = "";
@@ -1342,11 +1386,15 @@ async function addTermToAnki(expression: string, meaning: string, sourceSentence
         .map(value => value.trim())
         .find(value => value.length > 0) ?? expression;
 
+    const resolvedReading = jishoReading || inferReading(expression);
+    // Always attempt audio regardless of field map; injected directly into Audio model field below.
+    const audio = await fetchAudioForAnki(expression, resolvedReading);
+
     const templateData: AnkiTemplateData = {
         type: cardType,
         expression,
         meaning: normalizedMeaning,
-        reading: jishoReading || inferReading(expression),
+        reading: resolvedReading,
         kunyomi: "",
         onyomi: "",
         keywords: "",
@@ -1355,6 +1403,7 @@ async function addTermToAnki(expression: string, meaning: string, sourceSentence
         jlpt: "",
         sentence: sourceSentence,
         translation,
+        audio,
         image
     };
 
@@ -1419,6 +1468,7 @@ async function addKanjiToAnki(character: string, meaning: string, sourceSentence
         jlpt,
         sentence: sourceSentence,
         translation,
+        audio: "",
         image
     };
 
@@ -2082,7 +2132,7 @@ async function buildGlosses(tokens: string[], clauseTranslation: string) {
     }));
 }
 
-function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: RenderModalProps; text: string; mode: string; message?: Message; }) {
+const LookupPreviewModal = ErrorBoundary.wrap(function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: RenderModalProps; text: string; mode: string; message?: Message; }) {
     const [fullTranslation, setFullTranslation] = useState<string>("");
     const [clauseBreakdown, setClauseBreakdown] = useState<ClauseBreakdown[]>([]);
     const [error, setError] = useState<string>("");
@@ -2154,16 +2204,16 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
 
         try {
             await callAnkiConnect<number[]>("guiBrowse", { query: `nid:${noteId}` });
-            showToast("YomiCord: Opened duplicate in Anki", Toasts.Type.SUCCESS);
+            showToast({ text: "YomiCord: Opened in Anki Browser", variant: "success" });
         } catch (cause) {
             const message = cause instanceof Error ? cause.message : String(cause);
-            showToast(`YomiCord: Could not open duplicate (${message})`, Toasts.Type.FAILURE);
+            showToast({ text: `YomiCord: Could not open duplicate (${message})`, variant: "critical" });
         }
     };
 
     const renderDuplicateOpenButton = (key: string) => {
         const noteId = duplicateNoteIdByKey[key];
-        if (chipStatus[key] !== "duplicate" || !noteId) return null;
+        if (!noteId || (chipStatus[key] !== "duplicate" && chipStatus[key] !== "added")) return null;
 
         return (
             <button
@@ -2180,7 +2230,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                     justifyContent: "center",
                     cursor: "pointer"
                 }}
-                title="Open duplicate note in Anki Browser"
+                title={chipStatus[key] === "added" ? "View in Anki Browser" : "Open duplicate in Anki Browser"}
                 onClick={() => void openDuplicateInAnki(key)}
             >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -2271,7 +2321,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
             if (targetType === "kanji") {
                 duplicateLookupDeck = settings.store.ankiKanjiDeck;
                 duplicateLookupModel = settings.store.ankiKanjiModelName;
-                await addKanjiToAnki(
+                const kanjiNoteId = await addKanjiToAnki(
                     normalized,
                     meaning,
                     sourceSentence,
@@ -2282,12 +2332,8 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                     settings.store.ankiKanjiFieldMap
                 );
                 setChipStatus(prev => ({ ...prev, [key]: "added" }));
-                setDuplicateNoteIdByKey(prev => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
-                showToast(`YomiCord: Added kanji ${normalized}`, Toasts.Type.SUCCESS);
+                setDuplicateNoteIdByKey(prev => ({ ...prev, [key]: kanjiNoteId }));
+                showToast({ text: `YomiCord: Added kanji ${normalized}`, variant: "success" });
             } else {
                 const deckName = targetType === "grammar"
                     ? settings.store.ankiGrammarDeck
@@ -2313,14 +2359,10 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                 duplicateLookupDeck = deckName;
                 duplicateLookupModel = modelName;
 
-                await addTermToAnki(normalized, meaning, sourceSentence, translation, imageHtml, deckName, modelName, fieldMap, targetType, tags);
+                const termNoteId = await addTermToAnki(normalized, meaning, sourceSentence, translation, imageHtml, deckName, modelName, fieldMap, targetType, tags);
                 setChipStatus(prev => ({ ...prev, [key]: "added" }));
-                setDuplicateNoteIdByKey(prev => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
-                showToast(`YomiCord: Added term ${normalized}`, Toasts.Type.SUCCESS);
+                setDuplicateNoteIdByKey(prev => ({ ...prev, [key]: termNoteId }));
+                showToast({ text: `YomiCord: Added term ${normalized}`, variant: "success" });
             }
         } catch (cause) {
             const message = cause instanceof Error ? cause.message : String(cause);
@@ -2331,14 +2373,14 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
                 if (duplicateNoteId) {
                     setDuplicateNoteIdByKey(prev => ({ ...prev, [key]: duplicateNoteId }));
                 }
-                showToast("YomiCord: Already in Anki (duplicate)", Toasts.Type.SUCCESS);
+                showToast({ text: "YomiCord: Already in Anki (duplicate)", variant: "success" });
             } else {
                 setDuplicateNoteIdByKey(prev => {
                     const next = { ...prev };
                     delete next[key];
                     return next;
                 });
-                showToast(`YomiCord: Failed to add to Anki (${message})`, Toasts.Type.FAILURE);
+                showToast({ text: `YomiCord: Failed to add to Anki (${message})`, variant: "critical" });
             }
         } finally {
             setAddingKey(null);
@@ -2560,7 +2602,7 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
 
                 {showBreakdown && mode !== "kanji" && (
                     <section>
-                        <HeadingSecondary>Breakdown</HeadingSecondary>
+                        <Heading tag="h3">Breakdown</Heading>
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                             {clauseBreakdown.map((segment, index) => {
                                 const segmentGrammarPoints = extractSegmentGrammarPoints(segment);
@@ -2832,19 +2874,268 @@ function LookupPreviewModal({ modalProps, text, mode, message }: { modalProps: R
 
                 {error && (
                     <section>
-                        <HeadingSecondary>Translation Error</HeadingSecondary>
+                        <Heading tag="h3">Translation Error</Heading>
                         <div>{error}</div>
                     </section>
                 )}
             </div>
         </Modal>
     );
-}
+}, { noop: false });
 
 function openLookupPreviewModal(text: string, mode: string, message?: Message) {
     openModal((modalProps: RenderModalProps) => (
         <LookupPreviewModal modalProps={modalProps} text={text} mode={mode} message={message} />
     ));
+}
+
+// ----- Anki Card Miner: the app does the breakdown and makes the cards, so they match anime and game cards -----
+
+const MINER = {
+    accent: "#7aa2ff", green: "#3ecf8e", muted: "#8f96a6", line: "rgba(255,255,255,0.08)", box: "rgba(255,255,255,0.03)",
+    mark: "#2c3a5c", markText: "#cfdcff", red: "#ff7a7a"
+};
+
+function cardMinerPayload(text: string, message: Message) {
+    const channel = ChannelStore.getChannel(message.channel_id);
+    const guild = channel?.guild_id ? GuildStore.getGuild(channel.guild_id) : null;
+    const author = message.author as any;
+    return {
+        text,
+        message: sanitizeLookupText(message.content ?? ""),
+        author: author?.globalName || author?.global_name || author?.username || "",
+        avatar: author?.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png?size=128` : "",
+        channel: channel?.name || (channel ? "Direct message" : ""),
+        server: guild?.name || "",
+        id: message.id,
+        time: new Date(message.timestamp as any).getTime() / 1000 || Date.now() / 1000
+    };
+}
+
+// Asks the app something. Returns null when the app isn't open.
+async function askCardMiner(path: string, body: any): Promise<any | null> {
+    const answer = await Native.callCardMiner(path, JSON.stringify(body));
+    if (!answer) return null;
+    try {
+        return JSON.parse(answer);
+    } catch {
+        return null;
+    }
+}
+
+const MINER_LABEL: Record<string, [string, string]> = {
+    "in": ["in Anki", MINER.green], new: ["new", MINER.accent], known: ["known", MINER.muted], grammar: ["grammar", MINER.muted]
+};
+
+function rowState(row: any): string {
+    const option = row.options?.[0];
+    if (!option) return "known";
+    if (option.deck) return "in";
+    if (option.known) return "known";
+    if (option.grammar) return "grammar";
+    return "new";
+}
+
+function minerButton(primary = false): React.CSSProperties {
+    return {
+        border: `1px solid ${primary ? MINER.accent : MINER.line}`, background: primary ? MINER.accent : "transparent",
+        color: primary ? "#0d1222" : "var(--text-normal)", borderRadius: 8, padding: "4px 12px", fontSize: 13,
+        fontWeight: primary ? 700 : 500, cursor: "pointer"
+    };
+}
+
+const CardMinerModal = ErrorBoundary.wrap(function CardMinerModal({ modalProps, data, message, text }: { modalProps: RenderModalProps; data: any; message: Message; text: string; }) {
+    const [view, setView] = useState<"words" | "grammar">("words");
+    const [onlyNew, setOnlyNew] = useState(false);
+    const [added, setAdded] = useState<Record<string, string>>({});
+    const [hovered, setHovered] = useState<string>("");
+    const [showTranslation, setShowTranslation] = useState(false);
+    const [grammar, setGrammar] = useState<any[] | null>(null);
+    const [grammarState, setGrammarState] = useState<string>("");
+
+    const payload = cardMinerPayload(text, message);
+    const where = payload.channel && payload.channel !== "Direct message"
+        ? `${payload.author} · #${payload.channel}${payload.server ? ` · ${payload.server}` : ""}` : payload.author;
+    const rows: any[] = data.rows || [];
+    const newCount = rows.filter(r => rowState(r) === "new").length;
+    const shownRows = rows.filter(r => !onlyNew || rowState(r) === "new");
+
+    async function addWord(row: any) {
+        const option = { ...row.options[0], surface: row.text };
+        setAdded(a => ({ ...a, [row.text]: "Adding…" }));
+        const result = await askCardMiner("/discord/add", { file: data.file, option });
+        if (!result || result.error) {
+            setAdded(a => ({ ...a, [row.text]: "" }));
+            showToast({ text: `YomiCord: ${result?.error || "Anki Card Miner isn't open"}`, variant: "critical" });
+            return;
+        }
+        setAdded(a => ({ ...a, [row.text]: "Added" }));
+        showToast({ text: `YomiCord: Added ${result.word} to ${result.deck}`, variant: "success" });
+    }
+
+    async function loadGrammar() {
+        setGrammarState("Asking Claude…");
+        const result = await askCardMiner("/discord/grammar", { file: data.file });
+        if (!result || result.error) { setGrammarState(result?.error || "Anki Card Miner isn't open"); return; }
+        setGrammar(result.points || []);
+        setGrammarState("");
+    }
+
+    async function addGrammar(point: any) {
+        setAdded(a => ({ ...a, ["g:" + point.pattern]: "Adding…" }));
+        const result = await askCardMiner("/discord/add", { file: data.file, point });
+        if (!result || result.error) {
+            setAdded(a => ({ ...a, ["g:" + point.pattern]: "" }));
+            showToast({ text: `YomiCord: ${result?.error || "Anki Card Miner isn't open"}`, variant: "critical" });
+            return;
+        }
+        setAdded(a => ({ ...a, ["g:" + point.pattern]: "Added" }));
+    }
+
+    // The word under the pointer gets the same soft box as on the cards.
+    const sentence: string = data.sentence || text;
+    const at = hovered ? sentence.indexOf(hovered) : -1;
+    const sentenceView = at < 0 ? sentence : <>
+        {sentence.slice(0, at)}
+        <span style={{ background: MINER.mark, color: MINER.markText, borderRadius: 6, padding: "1px 5px" }}>{hovered}</span>
+        {sentence.slice(at + hovered.length)}
+    </>;
+
+    const tab = (key: "words" | "grammar", label: string) => (
+        <button onClick={() => setView(key)} style={{
+            border: 0, background: "none", padding: "6px 2px", marginRight: 18, cursor: "pointer", fontSize: 14,
+            color: view === key ? "var(--text-normal)" : MINER.muted, fontWeight: view === key ? 600 : 500,
+            borderBottom: `2px solid ${view === key ? MINER.accent : "transparent"}`
+        }}>{label}</button>
+    );
+
+    const status = (label: string, color: string) => (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: color }} />{label}
+        </span>
+    );
+
+    return (
+        <Modal
+            {...modalProps}
+            size="lg"
+            title="YomiCord"
+            subtitle={where || "Discord"}
+            actionBarInput={<span style={{ fontSize: 12, color: MINER.muted }}>New cards go to {data.deck}</span>}
+            actions={[
+                { text: "Classic view", variant: "secondary", onClick: () => { modalProps.onClose(); openLookupPreviewModal(text, detectLookupMode(text), message); } },
+                { text: "Close", variant: "primary", onClick: modalProps.onClose }
+            ]}
+        >
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 6 }}>
+                <div style={{ background: MINER.box, border: `1px solid ${MINER.line}`, borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div lang="ja" style={{ fontSize: 26, lineHeight: 1.7, color: "var(--text-normal)" }}>{sentenceView}</div>
+                    <div
+                        onMouseEnter={() => setShowTranslation(true)}
+                        onMouseLeave={() => setShowTranslation(false)}
+                        style={{
+                            borderTop: `1px solid ${MINER.line}`, paddingTop: 10, fontSize: 14, lineHeight: 1.5,
+                            color: showTranslation ? "var(--text-normal)" : MINER.muted, cursor: "default"
+                        }}
+                    >
+                        {showTranslation ? (data.translation || "Couldn't get a translation.") : "Hover to see the translation"}
+                    </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${MINER.line}` }}>
+                    {tab("words", "Words")}
+                    {tab("grammar", "Grammar")}
+                    {view === "words" && <>
+                        <span style={{ marginLeft: "auto", fontSize: 12.5, color: MINER.muted, marginRight: 10 }}>{newCount} new of {rows.length}</span>
+                        <button onClick={() => setOnlyNew(!onlyNew)} style={{
+                            border: `1px solid ${onlyNew ? MINER.accent : MINER.line}`, background: onlyNew ? "rgba(122,162,255,0.12)" : "transparent",
+                            color: onlyNew ? MINER.accent : MINER.muted, borderRadius: 999, padding: "3px 12px", fontSize: 12.5, cursor: "pointer", marginBottom: 4
+                        }}>New only</button>
+                    </>}
+                </div>
+
+                {view === "words" && <div lang="ja" style={{ display: "flex", flexDirection: "column" }}>
+                    {shownRows.map(row => {
+                        const option = row.options?.[0];
+                        const state = rowState(row);
+                        const [label, color] = MINER_LABEL[state];
+                        const quiet = state === "grammar" || (state === "known" && !option?.deck);
+                        const meaning = option?.senses?.[0]?.gloss?.slice(0, 4).join("; ") || "";
+                        const done = added[row.text];
+                        return (
+                            <div key={row.text + (option?.word || "")}
+                                onMouseEnter={() => setHovered(row.text)} onMouseLeave={() => setHovered("")}
+                                style={{
+                                    display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 14, alignItems: "center",
+                                    padding: quiet ? "8px 10px" : "12px 10px", borderRadius: 10,
+                                    background: hovered === row.text ? MINER.box : "transparent"
+                                }}>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                                        <b style={{ fontSize: quiet ? 16 : 21, color: quiet ? MINER.muted : "var(--text-normal)" }}>{option?.word || row.text}</b>
+                                        {option?.reading && option.reading !== option.word && <span style={{ fontSize: 13, color: MINER.muted }}>{option.reading}</span>}
+                                    </div>
+                                    {meaning && <div lang="en" style={{ fontSize: quiet ? 12.5 : 14, color: quiet ? MINER.muted : "var(--text-normal)", lineHeight: 1.45, marginTop: 2 }}>{meaning}</div>}
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                    {done === "Added" ? status("added", MINER.green) : status(label, color)}
+                                    {state === "new" && done !== "Added" && option &&
+                                        <button style={minerButton(true)} disabled={!!done} onClick={() => addWord(row)}>{done || "Add"}</button>}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {shownRows.length === 0 && <div style={{ color: MINER.muted, fontSize: 13, padding: "10px" }}>Every word here is already in Anki or known.</div>}
+                </div>}
+
+                {view === "grammar" && <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {grammar === null && <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 2px" }}>
+                        <button style={minerButton(true)} onClick={loadGrammar} disabled={!!grammarState}>{grammarState || "Find grammar"}</button>
+                        <span style={{ fontSize: 13, color: MINER.muted }}>Claude explains the grammar in this message.</span>
+                    </div>}
+                    {grammar?.map(point => {
+                        const done = added["g:" + point.pattern];
+                        const inDeck = !!point.deck;
+                        return (
+                            <div key={point.pattern} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 14, alignItems: "start", padding: "12px 10px", borderRadius: 10 }}>
+                                <div style={{ minWidth: 0, fontSize: 14, lineHeight: 1.5 }}>
+                                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                                        <b lang="ja" style={{ fontSize: 19, color: "var(--text-normal)" }}>{point.pattern}</b>
+                                        <span style={{ color: "var(--text-normal)" }}>{point.meaning}</span>
+                                    </div>
+                                    <div style={{ color: MINER.muted, marginTop: 3 }}>{point.explanation}</div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                    {inDeck ? status("in Anki", MINER.green) : done === "Added" ? status("added", MINER.green) : status("new", MINER.accent)}
+                                    {!inDeck && done !== "Added" &&
+                                        <button style={minerButton(true)} disabled={!!done} onClick={() => addGrammar(point)}>{done || "Add"}</button>}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {grammar?.length === 0 && <div style={{ color: MINER.muted, fontSize: 13, padding: "10px" }}>No grammar points found.</div>}
+                    {grammar !== null && grammarState && <div style={{ color: MINER.red, fontSize: 13 }}>{grammarState}</div>}
+                </div>}
+            </div>
+        </Modal>
+    );
+}, { noop: false });
+
+function openCardMinerModal(data: any, message: Message, text: string) {
+    openModal((modalProps: RenderModalProps) => (
+        <CardMinerModal modalProps={modalProps} data={data} message={message} text={text} />
+    ));
+}
+
+// Look up: the app breaks it down when it's open; otherwise YomiCord's own lookup, as before.
+async function lookUp(text: string, message: Message) {
+    const data = await askCardMiner("/discord/lookup", cardMinerPayload(text, message));
+    if (data && !data.error) {
+        openCardMinerModal(data, message, text);
+        return;
+    }
+    if (data?.error) showToast({ text: `YomiCord: ${data.error}`, variant: "critical" });
+    openLookupPreviewModal(text, detectLookupMode(text), message);
 }
 
 const messageContextPatch: NavContextMenuPatchCallback = (children, { message }: { message: Message; }) => {
@@ -2858,22 +3149,20 @@ const messageContextPatch: NavContextMenuPatchCallback = (children, { message }:
         ? group.findIndex(child => child?.props?.id === "copy-text") + 1
         : -1;
 
-    const menuItem = (
+    const menuItems = [
         <Menu.MenuItem
             id="vc-yomicord-lookup"
+            key="vc-yomicord-lookup"
             label="Look up with YomiCord"
             icon={YomiCordIcon}
-            action={() => {
-                const mode = detectLookupMode(selectedText);
-                openLookupPreviewModal(selectedText, mode, message);
-            }}
+            action={() => { void lookUp(selectedText, message); }}
         />
-    );
+    ];
 
     if (insertIndex > 0) {
-        group.splice(insertIndex, 0, menuItem);
+        group.splice(insertIndex, 0, ...menuItems);
     } else {
-        group.push(menuItem);
+        group.push(...menuItems);
     }
 };
 
@@ -2881,7 +3170,8 @@ export default definePlugin({
     name: "YomiCord",
     description: "Japanese lookup and Anki mining inside Discord",
     authors: [{ name: "htspider", id: 0n }],
-    tags: ["Japanese", "Anki", "Utility"],
+    tags: ["Utility"],
+    searchTerms: ["Japanese", "Anki"],
     settings,
     contextMenus: {
         message: messageContextPatch
